@@ -1,0 +1,96 @@
+<html>
+<head>
+<title>Chat Room - Service</title>
+<script>
+// main app
+window.addEventListener("DOMContentLoaded", function(){
+	initChat();
+});
+let socket=null;
+function initChat(){
+	socket=new WebSocket('ws://localhost:8080/');
+	// Connection opened
+	socket.addEventListener("open", function(event){
+		socket.send(JSON.stringify({
+			action:"service-init",
+			auth:"service-secret"
+		}));
+	});
+	// Listen for messages
+	socket.addEventListener("message", function(event){
+		let data=JSON.parse(event.data);
+		switch(data.action){
+			case "server-service-init":
+				showChatList(data.payload);
+				break;
+			case "server-service-enter":
+				startChat(data.payload);
+				break;
+			case "server-service-message":
+				updateMessages(data.payload);
+				break;
+		}
+	});
+}
+function showChatList(usersData){
+	let chatlist=document.querySelector("#chat-list");
+	chatlist.innerHTML="";
+	for(let key in usersData){
+		let data=usersData[key];
+		chatlist.innerHTML+="<button onclick=\"enterChat('"+data.username+"');\">"+data.username+"</button>";
+		console.log(key, usersData[key]);
+	}
+}
+function enterChat(username){
+	socket.send(JSON.stringify({
+		action:"service-enter",
+		auth:"service-secret",
+		payload:{
+			username:username
+		}
+	}));
+}
+function startChat(userData){
+	document.querySelector("#chat").style.display="block";
+	document.querySelector("#username").innerHTML=userData.username;
+	updateMessages(userData);
+}
+function updateMessages(userData){
+	let messages=document.querySelector("#messages");
+	if(userData.messages.length===0){
+		messages.innerHTML="目前沒有訊息";
+	}else{
+		messages.innerHTML="";
+	}
+	for(let i=0;i<userData.messages.length;i++){
+		messages.innerHTML+="<div>"+userData.messages[i]+"</div>";
+	}
+}
+function sendMessage(){
+	let message=document.querySelector("#message");
+	if(message.value.trim().length===0){
+		return;
+	}
+	socket.send(JSON.stringify({
+		action:"service-message",
+		auth:"service-secret",
+		payload:{
+			message:message.value
+		}
+	}));
+	message.value="";
+	message.focus();
+}
+</script>
+</head>
+<body>
+	<h2>客服人員</h2>
+	<div id="chat-list"></div>
+	<div id="chat" style="display:none">
+		<h3 id="username"></h3>
+		<div id="messages"></div>
+		<input type="text" id="message" />
+		<button onclick="sendMessage();">Send</button>
+	</div>
+</body>
+</html>

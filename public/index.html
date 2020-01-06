@@ -1,0 +1,130 @@
+<html>
+<head>
+<title>Chat Room - Customer</title>
+<script>
+function getCookie(cname) {
+	let name=cname+"=";
+	let decodedCookie=decodeURIComponent(document.cookie);
+	let ca=decodedCookie.split(";");
+	for(let i=0;i<ca.length;i++){
+		let c=ca[i];
+		while(c.charAt(0)===" "){
+			c=c.substring(1);
+		}
+		if(c.indexOf(name)===0){
+			return c.substring(name.length, c.length);
+		}
+	}
+	return null;
+}
+function setCookie(cname, cvalue, exdays){
+	let d=new Date();
+	d.setTime(d.getTime() + (exdays * 24 * 60 * 60 * 1000));
+	let expires="expires="+d.toUTCString();
+	document.cookie=cname+"="+cvalue+";"+expires+";path=/";
+}
+// main app
+let auth;
+window.addEventListener("DOMContentLoaded", function(){
+	updateAuthStatus();
+});
+let updateAuthStatus=function(){
+	let token=getCookie("token");
+	let username=getCookie("username");
+	document.querySelector("#signin").style.display="none";
+	document.querySelector("#chat").style.display="none";
+	if(token===null || username===null){
+		auth=null;
+		document.querySelector("#signin").style.display="block";
+	}else{
+		auth={
+			username:username,
+			token:token
+		};
+		document.querySelector("#chat").style.display="block";
+		initChat();
+	}
+};
+let socket=null;
+function initChat(){
+	socket=new WebSocket('ws://localhost:8080/');
+	// Connection opened
+	socket.addEventListener("open", function(event){
+		socket.send(JSON.stringify({
+			action:"client-init",
+			auth:auth
+		}));
+	});
+	// Listen for messages
+	socket.addEventListener("message", function(event){
+		let data=JSON.parse(event.data);
+		switch(data.action){
+			case "server-reject":
+				socket.close();
+				closeChat();
+				break;
+			case "server-init":
+				startChat(data.payload);
+				break;
+			case "server-message":
+				updateMessages(data.payload);
+				break;
+		}
+	});
+}
+function startChat(userData){
+	document.querySelector("#username").innerHTML=userData.username;
+	updateMessages(userData);
+}
+function updateMessages(userData){
+	let messages=document.querySelector("#messages");
+	if(userData.messages.length===0){
+		messages.innerHTML="目前沒有訊息";
+	}else{
+		messages.innerHTML="";
+	}
+	for(let i=0;i<userData.messages.length;i++){
+		messages.innerHTML+="<div>"+userData.messages[i]+"</div>";
+	}
+}
+function sendMessage(){
+	let message=document.querySelector("#message");
+	if(message.value.trim().length===0){
+		return;
+	}
+	socket.send(JSON.stringify({
+		action:"client-message",
+		auth:auth,
+		payload:{
+			message:message.value
+		}
+	}));
+	message.value="";
+	message.focus();
+}
+function closeChat(){
+	setCookie("token", "", -1);
+	setCookie("username", "", -1);
+	updateAuthStatus();
+}
+</script>
+</head>
+<body>
+	<h2>即時客服</h2>
+	<div id="signin" style="display:none">
+		<h3>Sign In</h3>
+		<form action="/signin" method="post">
+			Username <input type="text" name="username" /><br/>
+			Passowrd <input type="password" name="password" /><br/>
+			<input type="submit" value="Sign In" />
+		</form>
+	</div>
+	<div id="chat" style="display:none">
+		<h3 id="username"></h3>
+		<div id="messages"></div>
+		<input type="text" id="message" />
+		<button onclick="sendMessage();">Send</button>
+		<button onclick="closeChat();">Close</button>
+	</div>
+</body>
+</html>
